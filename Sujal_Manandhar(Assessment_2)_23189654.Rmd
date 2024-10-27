@@ -1,0 +1,695 @@
+---
+title: "Assessment 2: Data exploration and wrangling"
+author: "Sujal Manandhar (23189654/1)"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+### Part 1: Wrangling Data
+
+## In this part, we will focus on data preparation and cleaning involves several key tasks to ensure our dataset is ready for analysis.
+
+## Load Necessary Libraries
+
+# Task 1: Importing the required libraries.
+```{r}
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(caret)
+```
+
+## Load the Dataset
+
+# Task 2: Reading the dataset 'accidents.csv' and storing it in the variable 'data'.
+```{r}
+data <- read.csv('accidents.csv')
+```
+
+## Display Initial Rows of the Dataset
+
+# Task 3: Viewing the top 5 rows to get an overview of the data.
+```{r}
+head(data, 5)
+```
+## List Column Names
+
+# Task 4: Retrieving and displaying the names of all columns in the dataset.
+```{r}
+column_names <- names(data)
+column_names
+```
+## Rename Columns for Clarity
+
+# Task 5: Renaming columns to improve readability and consistency.
+```{r}
+colnames(data) <- c("Number_of_Vehicles", "Accident_Date", "Time_24hr", "First_Road_Class", 
+                    "Road_Surface", "Lighting_Conditions", "Daylight_Dark", "Weather_Conditions", 
+                    "Local_Authority", "Type_of_Vehicle", "Casualty_Class", "Casualty_Severity", 
+                    "Sex_of_Casualty", "Age_of_Casualty")
+
+names(data)
+```
+## Data Structure Overview
+
+# Task 6: Displaying the structure of the dataset to understand the data types and initial values.
+```{r}
+str(data)
+```
+## Statistical Summary
+
+# Task 7: Generating a concise summary of statistics for each variable in the dataset.
+```{r}
+summary(data)
+```
+## Row Count
+
+# Task 8: Counting and displaying the total number of rows in the dataset.
+```{r}
+num_rows <- nrow(data)
+num_rows
+```
+## Column Count
+
+# Task 9: Counting and displaying the total number of columns in the dataset.
+```{r}
+num_cols <- ncol(data)
+num_cols
+```
+## Date Column Format
+
+# Task 10: Checking and converting the date format for the 'Accident_Date' column.
+```{r}
+str(data$Accident_Date)
+
+# Convert the "Accident_Date" column to a date format
+data$Accident_Date <- as.Date(data$Accident_Date, format = "%d/%m/%Y")
+
+str(data$Accident_Date)  # After changes
+```
+## Time Column Overview
+
+# Task 11: Checking the structure and unique values of the 'Time_24hr' column.
+```{r}
+str(data$Time_24hr)
+unique(data$Time_24hr)
+```
+
+## Time Format Function
+
+# Task 12: Creating a function to format time from numeric to HH string format.
+```{r}
+format_time <- function(time_col) {
+  
+  # Convert to character and ensure it has 4 digits
+  time_str <- sprintf("%04.0f", time_col)
+  
+  # Extract hours and minutes
+  hours <- substr(time_str, 1, 2)
+  minutes <- substr(time_str, 3, 4)
+  
+  # Format time into HH:MM string
+  formatted_time <- paste(hours, minutes, sep = ":")
+  
+  return(formatted_time)
+}
+```
+
+## Apply Time Format Function
+
+# Task 13: Applying the created function to format the time and update the 'Time_24hr' column.
+```{r}
+data <- data %>%
+  mutate(Time_24hr_ = format_time(Time_24hr)) %>%
+  select(-Time_24hr)  # Drop the original 'Time_24hr' column
+
+# Reorder columns to place 'Time_24hr_' after 'Accident_Date'
+data <- data %>%
+  select(Number_of_Vehicles, Accident_Date, Time_24hr_, everything())
+
+str(data$Time_24hr_)
+unique(data$Time_24hr_)
+```
+
+## Display Updated Rows
+
+# Task 14: Viewing the top 5 rows to confirm the new time format.
+```{r}
+head(data, 5)
+```
+
+## Missing Values Check
+
+# Task 15: Checking for missing values in each column and printing the results.
+```{r}
+missing_per_column <- colSums(is.na(data))
+print(missing_per_column)
+```
+
+## Missing Data Analysis
+
+# Task 16: Creating contingency tables for columns to assess missing data patterns.
+```{r}
+# Define the columns to check
+categorical_vars <- c("First_Road_Class", "Road_Surface", "Lighting_Conditions", "Weather_Conditions", 
+                      "Type_of_Vehicle", "Casualty_Class", "Casualty_Severity", "Sex_of_Casualty")
+
+# Loop through categorical variables to create contingency tables
+for (var in categorical_vars) {
+  contingency_table <- table(is.na(data$Age_of_Casualty), data[[var]])
+  cat("\nContingency table for column:", var, "\n")
+  print(contingency_table)
+}
+```
+
+## Example of Missing Data Assessment
+
+# Task 17:  Example of MAR and NMAR Assessment: 
+1. **Example of MAR:** Missing values in 'Age_of_Casualty' could be influenced by other observed factors such as 'Casualty_Severity'. This suggests the missing data leans towards MAR (Missing At Random).
+2. **Example of NMAR:** Missing values in 'Age_of_Casualty' might be influenced by unobserved factors, such as the age being systematically unreported for certain groups. 
+Since the data appears to be Missing At Random (MAR), we can use a linear model to impute the missing values. This will be addressed in "Part 3: Regression". 
+
+## Duplicate Rows Check
+
+# Task 18: Identifying and counting duplicate rows in the dataset.
+```{r}
+# Check for duplicate rows
+duplicate_rows <- data[duplicated(data), ]
+num_duplicate_rows <- nrow(duplicate_rows)
+print(num_duplicate_rows)
+```
+## Road Surface Anomalies
+
+# Task 19: Displaying and cleaning anomalies in the 'Road_Surface' column.
+```{r}
+unique(data$Road_Surface)
+```
+## Clean Road Surface Anomalies
+
+# Task 20: Replacing variations in 'Road_Surface' with standardized values.
+```{r}
+data$Road_Surface <- recode(data$Road_Surface,
+  "1" = "Dry",
+  "2" = "Wet/Damp",
+  "3" = "Snow",
+  "4" = "Frost/Ice",
+  "5" = "Flood",
+  "Wet \xa8 Damp" = "Wet",
+  "Wet/Damp" = "Wet",
+  "Frost/Ice" = "Ice"
+)
+
+unique(data$Road_Surface)
+```
+## First Road Class Anomalies
+
+# Task 21: Displaying distinct values and cleaning anomalies in the 'First_Road_Class' column.
+```{r}
+unique(data$First_Road_Class)
+```
+## Clean First Road Class Anomalies
+
+# Task 22: Standardizing values in 'First_Road_Class' using specific mappings and conditions.
+```{r}
+data$First_Road_Class <- recode(data$First_Road_Class,
+  "6" = "U",
+  "1" = "M",
+  "2" = "A(M)",
+  "3" = "A",
+  "4" = "B",
+  "5" = "C",
+)
+
+# Modify values based on additional conditions using grepl
+data$First_Road_Class <- ifelse(grepl("^A.*\\(M\\)$", data$First_Road_Class),
+                               "A(M)", 
+                               ifelse(grepl("^A.*$", data$First_Road_Class),
+                                      "A", 
+                                      ifelse(grepl("^B.*$", data$First_Road_Class),
+                                             "B",
+                                             ifelse(grepl("^C.*$", data$First_Road_Class),
+                                                    "C",
+                                                    ifelse(grepl("^M.*$", data$First_Road_Class),
+                                                           "M",
+                                                           data$First_Road_Class
+                                                    )
+                                             )
+                                      )
+                               )
+)
+
+# Display unique values after recoding
+unique(data$First_Road_Class)
+```
+## Identify Unnecessary Columns
+
+# Task 23: Listing all columns to identify which ones are unnecessary.
+```{r}
+names(data)
+```
+## Drop Unnecessary Column
+
+# Task 24: Removing the 'Local_Authority' column as it is non-informative for the analysis.
+```{r}
+data <- data %>% select(-Local_Authority)
+```
+
+## Compare Columns for Redundancy
+
+# Task 25: Comparing 'Lighting_Conditions' and 'Daylight_Dark' columns for redundancy.
+```{r}
+unique(data$Lighting_Conditions)
+unique(data$Daylight_Dark)
+```
+
+## Drop Redundant Column
+
+# Task 26: Dropping 'Daylight_Dark' column due to redundancy and ease of working with integers.
+```{r}
+data <- data %>% select(-Daylight_Dark)
+```
+
+## Remove Duplicate Rows
+
+# Task 27: Keeping only unique rows and displaying the dimensions of the cleaned dataset.
+```{r}
+data <- unique(data)
+dim(data)
+```
+
+## Display Cleaned Data
+
+# Task 28: Showing the first 100 rows of the cleaned dataset.
+```{r}
+head(data, 100)
+```
+
+## Outlier Detection Using Different Methods
+
+##  3-Sigma Rule
+
+# Task 29: Detecting outliers in 'Age_of_Casualty' using the 3-sigma rule.
+```{r}
+# Filter out rows with NA values in Age_of_Casualty column
+filtered_data <- data[!is.na(data$Age_of_Casualty), ]
+
+age_of_casualty <- filtered_data$Age_of_Casualty
+
+# Calculate mean and standard deviation for Age_of_Casualty 
+mean_age <- mean(age_of_casualty)
+sd_age <- sd(age_of_casualty)
+
+# Calculate upper and lower bounds for 3-sigma rule
+upper_bound <- mean_age + 3 * sd_age
+lower_bound <- mean_age - 3 * sd_age
+
+# Identify outliers using the 3-sigma rule
+outliers_sigma <- age_of_casualty[age_of_casualty > upper_bound | age_of_casualty < lower_bound]
+
+# Print the outliers
+print(outliers_sigma)
+
+# Create a dataset for outliers
+outliers_dataset <- filtered_data %>%
+  filter(Age_of_Casualty > upper_bound | Age_of_Casualty < lower_bound)
+
+# Print the number of outliers
+number_of_outliers_sigma <- nrow(outliers_dataset)
+print(paste("Number of outliers:", number_of_outliers_sigma))
+print(outliers_dataset)
+```
+
+##  Hampel Method
+
+# Task 30: Detecting outliers using the Hampel method.
+```{r}
+# Remove NA values from Age_of_Casualty
+age_casualty <- filtered_data$Age_of_Casualty
+
+# Calculate the median and MAD
+median_age <- median(age_casualty)
+mad_age <- mad(age_casualty)
+
+# Calculate Hampel's upper and lower bounds
+hampel_upper_bound <- median_age + 3 * mad_age
+hampel_lower_bound <- median_age - 3 * mad_age
+
+# Identify outliers using Hampel identifier
+outliers_hampel <- age_casualty[age_casualty > hampel_upper_bound | age_casualty < hampel_lower_bound]
+
+# Print the outliers
+print(outliers_hampel)
+
+# Create a dataset for Hampel outliers
+outliers_hampel_dataset <- filtered_data %>%
+  filter(Age_of_Casualty > hampel_upper_bound | Age_of_Casualty < hampel_lower_bound)
+
+# Print the number of Hampel outliers
+number_of_outliers_hampel <- nrow(outliers_hampel_dataset)
+print(paste("Number of Hampel outliers:", number_of_outliers_hampel))
+
+print(outliers_hampel_dataset)
+```
+
+## Box Plot for Outlier Detection
+
+# Task 31: Visual inspection of outliers using a box plot.
+```{r}
+# Visual inspection with boxplot
+ggplot(filtered_data, aes(y = Age_of_Casualty)) +
+  geom_boxplot()
+```
+#Question: Examine “Age of Casualty” for any outliers using the three methods discussed in the lectures. Compare the output of these methods. Which one is the best? Justify your answer.
+# Answer: In examining outliers in the "Age_of_Casualty" column using three distinct methods—namely the 3-sigma rule, Hampel method, and visual inspection with a box plot—a comparison reveals the strengths and applicability of each approach. The 3-sigma rule calculates outliers based on the mean and standard deviation, offering a straightforward numerical criterion that is effective for normally distributed data. It identified outliers in the "Age_of_Casualty" column using a clear statistical threshold. In contrast, the Hampel method, relying on the median and Median Absolute Deviation (MAD), proved robust against outliers and non-normally distributed data, accommodating skewed distributions better. Visual inspection with the box plot provided a graphical overview, facilitating quick identification of extreme values outside the whiskers. However, for precision and clarity in outlier detection, especially in datasets where normal distribution assumptions hold, the 3-sigma rule emerged as the preferred method. Its defined threshold based on standard deviations offers a reliable measure to pinpoint outliers in the "Age_of_Casualty" column, ensuring a systematic approach to data analysis and outlier management.
+
+## Export Cleaned Dataset
+
+# Task 32: Saving the cleaned dataset as a CSV file named 'clean_accident.csv'.
+```{r}
+write.csv(data, "clean_accident.csv", row.names = FALSE)
+```
+
+# Summary of Part 1: Wrangling Data
+# In Part 1 of the project, we focused on preprocessing and exploring a dataset on traffic accidents. Initially, we loaded necessary libraries and imported the dataset 'accidents.csv'. We renamed columns for clarity, adjusted date and time formats, and addressed missing data by assessing patterns across categorical variables. Outlier detection in the "Age_of_Casualty" column was conducted using the 3-sigma rule, Hampel method, and visual inspection via box plots, with the 3-sigma rule proving most suitable due to its clear statistical thresholds. We standardized column values, removed duplicates, and dropped redundant columns like 'Local_Authority' and 'Daylight_Dark'. The cleaned dataset was saved as 'clean_accident.csv', ensuring data integrity for further analysis. <br>
+
+### Part 2: Exploration
+
+## In this part, we will do exploratory data analysis (EDA) and data visualization.
+
+# Task 1: Weather Conditions with More Male Driver Casualties than Female
+
+# Description: This analysis identifies weather conditions where male drivers have more accidents compared to female drivers, highlighting potential gender-specific risk factors in different weather scenarios.
+
+```{r}
+# Filter dataframe to include only drivers or riders (Casualty_Class == 1)
+drivers_riders_data <- data %>%
+  filter(Casualty_Class == 1)
+
+# Calculate the number of accidents by gender (Sex_of_Casualty) and weather condition (Weather_Conditions)
+accidents_by_gender_weather <- drivers_riders_data %>%
+  group_by(Weather_Conditions, Sex_of_Casualty) %>%
+  summarise(total_accidents = n(), .groups = 'drop')
+
+# Filter to find cases where male drivers (Sex_of_Casualty == 1) have more accidents than female drivers (Sex_of_Casualty == 2)
+male_more_than_female <- accidents_by_gender_weather %>%
+  filter(Sex_of_Casualty == 1 & total_accidents > lag(total_accidents)) %>%
+  mutate(diff_more = total_accidents - lag(total_accidents),
+         diff_more = ifelse(is.na(diff_more), total_accidents, diff_more))
+
+# Print the results
+cat("Weather conditions where male drivers have more accidents than females:\n")
+for (i in 1:nrow(male_more_than_female)) {
+  cat(i, ". Under weather condition", male_more_than_female$Weather_Conditions[i], 
+      ", male drivers had", male_more_than_female$total_accidents[i], 
+      "more accidents than female drivers.\n")
+}
+cat("\n")
+```
+
+# Question 1: Is there any weather condition where male drivers/riders have more accidents than female drivers? Print out how many (e.g., "male drivers have ----- more than females when weather is ----. 
+# Answer: According to the analysis, there are weather conditions where male drivers/riders have more accidents than female drivers. Here are the specific findings: 
+# a. Under weather condition 4 (Fine with high winds), male drivers (Sex_of_Casualty == 1) had 7 more accidents than female drivers (Sex_of_Casualty == 2). 
+# b. Under weather condition 5 (Raining with high winds), male drivers had 26 more accidents than female drivers. 
+# c. Under weather condition 7 (Fog or mist – if hazard), male drivers had 6 more accidents than female drivers.
+# These findings suggest that weather conditions like high winds and rain disproportionately affect male drivers in terms of accident rates compared to female drivers. 
+
+# Task 2: Year with Highest Number of Casualties and Trend Over Time
+
+# Description: The graph below visualizes the trend in the number of casualties over the years, revealing insights into whether the frequency of accidents resulting in casualties has increased or decreased over time.
+
+```{r}
+# Extract the year from the Accident_Date
+data <- data %>%
+  mutate(Year = year(ymd(Accident_Date)))
+
+# Group by year and calculate the total number of casualties
+casualties_over_time <- data %>%
+  group_by(Year) %>%
+  summarise(total_casualties = n())
+
+# Find the year with the highest number of casualties
+year_max_casualties <- casualties_over_time %>%
+  arrange(desc(total_casualties)) %>%
+  slice(1)
+
+cat("Year with the highest number of casualties:\n")
+print(year_max_casualties)
+cat("\n")
+
+# Plot the trend of casualties over time
+ggplot(casualties_over_time, aes(x = Year, y = total_casualties)) +
+  geom_line() +
+  geom_point() +
+  labs(title = "Trend of Casualties Over Time", x = "Year", y = "Total Casualties") +
+  theme_minimal()
+```
+
+# Question 2: Is the number of casualties increased or decreased over time? Which year has the highest number of casualties? 
+# Answer: The number of casualties has generally decreased over time. The year 2014 had the highest number of casualties according to the data. This trend indicates that efforts in road safety and possibly improvements in infrastructure or driving habits may have contributed to reducing the overall number of accidents and casualties over the years. 
+
+# Task 3: Relationship Between Light Conditions and Severity
+
+# Description: The bar chart below illustrates how different light conditions affect the severity of accidents, providing insights into how visibility influences the outcomes of traffic incidents.
+
+```{r}
+unique(data$Lighting_Conditions)
+unique(data$Casualty_Severity)
+ 
+# Create a mapping from integers to lighting conditions characters
+lighting_conditions_mapping <- c(
+  "1" = "Daylight: street lights present",
+  "2" = "Daylight: no street lighting",
+  "3" = "Daylight: street lighting unknown",
+  "4" = "Darkness: street lights present and lit",
+  "5" = "Darkness: street lights present but unlit",
+  "6" = "Darkness: no street lighting",
+  "7" = "Darkness: street lighting unknown"
+)
+
+# Create a mapping from integers to casualty severity in string
+casualty_severity_mapping <- c(
+  "1" = "Fatal",
+  "2" = "Serious",
+  "3" = "Slight"
+)
+
+# Replace Lighting Conditions and Casualty Severity integers with corresponding character labels
+data <- data %>%
+  mutate(Lighting_Conditions = lighting_conditions_mapping[as.character(Lighting_Conditions)],
+         Casualty_Severity = casualty_severity_mapping[as.character(Casualty_Severity)])
+
+# Group by the original lighting conditions and severity, then count the number of accidents
+light_severity_summary <- data %>%
+  group_by(Lighting_Conditions, Casualty_Severity) %>%
+  summarise(accident_count = n(), .groups = 'drop')
+
+# Plot the relationship between light conditions and severity using original character labels for light conditions
+ggplot(light_severity_summary, aes(x = Lighting_Conditions, y = accident_count, fill = Casualty_Severity)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Relationship Between Light Conditions and Severity", x = "Light Conditions", y = "Number of Accidents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Observation 
+# The plot illustrates how light conditions impact the severity of accidents. It shows that accidents under darkness (no street lighting) tend to have higher severity compared to daylight conditions. This insight suggests that adequate street lighting could potentially reduce the severity of accidents during darker hours.
+
+# Task 4:  Relationship Between Weather Condition and Number of Vehicles Involved
+
+# Description: This grouped bar chart below explores how different weather conditions correlate with the number of vehicles involved in accidents, shedding light on environmental factors influencing accident severity and complexity.
+
+```{r}
+# Group by weather condition and number of vehicles involved, then count the number of accidents
+weather_vehicles_summary <- data %>%
+  group_by(Weather_Conditions, Number_of_Vehicles) %>%
+  summarise(accident_count = n())
+
+# Plot the relationship between weather condition and number of vehicles involved
+ggplot(weather_vehicles_summary, aes(x = Weather_Conditions, y = accident_count, fill = as.factor(Number_of_Vehicles))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Relationship Between Weather Condition and Number of Vehicles Involved", x = "Weather Condition", y = "Number of Accidents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Observation 
+# The graph depicts how weather conditions influence the number of vehicles involved in accidents. Notably, poor weather conditions such as rain and snow correlate with an increase in accidents involving multiple vehicles. This correlation implies that adverse weather conditions contribute to more complex accident scenarios, possibly due to reduced visibility and road traction. 
+
+# Task 5:  Distribution of Casualty Severity by Weather Conditions
+
+# Description: This line plot below shows the trend in casualties over time across different lighting conditions, highlighting variations in accident frequencies during daylight versus darkness periods.
+
+```{r}
+# Group by weather condition and casualty severity, then count the number of accidents
+weather_severity_summary <- data %>%
+  group_by(Weather_Conditions, Casualty_Severity) %>%
+  summarise(accident_count = n())
+
+# Plot the distribution of casualty severity across different weather conditions
+ggplot(weather_severity_summary, aes(x = Weather_Conditions, y = accident_count, fill = Casualty_Severity)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Distribution of Casualty Severity by Weather Conditions", x = "Weather Condition", y = "Number of Accidents", fill = "Casualty Severity") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Task 6:  Proportion of Casualties by Type of Vehicle
+
+# Description: The histogram shown below visualizes the distribution of age among casualties, providing insights into the demographics most affected by traffic accidents.
+
+```{r}
+# Calculate proportions of casualties by type of vehicle
+vehicle_casualty_summary <- data %>%
+  group_by(Type_of_Vehicle) %>%
+  summarise(total_casualties = n()) %>%
+  mutate(proportion = total_casualties / sum(total_casualties) * 100) %>%
+  arrange(desc(proportion))
+
+# Plot the proportion of casualties by type of vehicle
+ggplot(vehicle_casualty_summary, aes(x = reorder(Type_of_Vehicle, -proportion), y = proportion)) +
+  geom_bar(stat = "identity", fill = "skyblue") +
+  labs(title = "Proportion of Casualties by Type of Vehicle", x = "Type of Vehicle", y = "Proportion (%)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Task 7:  Casualties Over Time by Daylight vs. Darkness
+
+# Description: The chart below illustrates the distribution of accident severity levels, offering a clear view of how severe and non-severe accidents compare within the dataset.
+
+```{r}
+# Ensure Accident_Date is in Date format
+data$Accident_Date <- as.Date(data$Accident_Date, format = "%d/%m/%Y")
+
+# Extract the year from the Accident_Date
+data <- data %>%
+  mutate(Year = lubridate::year(Accident_Date))
+
+# Group by year, daylight/dark conditions, and calculate total casualties
+daylight_casualties <- data %>%
+  group_by(Year, Lighting_Conditions) %>%
+  summarise(total_casualties = n())
+
+# Plot casualties over time by daylight vs. darkness conditions
+ggplot(daylight_casualties, aes(x = Year, y = total_casualties, color = Lighting_Conditions)) +
+  geom_line() +
+  labs(title = "Casualties Over Time by Daylight vs. Darkness", x = "Year", y = "Total Casualties", color = "Lighting Conditions") +
+  theme_minimal()
+```
+
+# Task 8:  Road Surface Conditions vs. Number of Vehicles Involved
+
+# Description: This bar chart below displays the distribution of different road surface conditions involved in accidents, offering insights into which types of surfaces are most frequently associated with traffic incidents.
+
+```{r}
+# Group by road surface condition and number of vehicles involved, then count the number of accidents
+road_surface_vehicles_summary <- data %>%
+  group_by(Road_Surface, Number_of_Vehicles) %>%
+  summarise(accident_count = n())
+
+# Plot the relationship between road surface condition and number of vehicles involved
+ggplot(road_surface_vehicles_summary, aes(x = Road_Surface, y = accident_count, fill = as.factor(Number_of_Vehicles))) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Road Surface Conditions vs. Number of Vehicles Involved", x = "Road Surface Condition", y = "Number of Accidents") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+# Summary of Part 2: Exploration 
+# Part 2 of the analysis explored different aspects of traffic accidents to understand what influences how severe accidents are, who gets affected the most, and how things change over time. We found that in certain weather conditions like rain and strong winds, men tend to have more accidents compared to women. The analysis also showed that accidents during bad weather often involve more vehicles. Over the years, there has been a decrease in the number of accidents causing injuries, with the year 2014 having the most injuries reported. Light conditions also play a big role, as accidents in the dark without street lights tend to be more severe. Looking at different types of vehicles involved in accidents, we found some vehicles are more commonly involved than others. These findings help us understand how different factors contribute to traffic accidents and their outcomes. 
+
+### Part 3: Regression
+
+## In this part, we will use a linear regression model to impute the missing values in the "Age of Casualty" column. We will follow the tasks(steps) to prepare the data, train the model, predict the missing values, and finally save the imputed dataset.
+
+# Task 1:  Convert the required columns to factors
+
+# We start by converting the relevant columns to factors, as linear regression modeling in R requires categorical predictors to be factors.
+```{r}
+# Converting selected columns to factors
+data$`Casualty_Class` <- as.factor(data$`Casualty_Class`)
+data$`Casualty_Severity` <- as.factor(data$`Casualty_Severity`)
+data$`Type_of_Vehicle` <- as.factor(data$`Type_of_Vehicle`)
+data$`Weather Conditions` <- as.factor(data$`Weather_Conditions`)
+```
+
+# Task 2:  Create a new data frame containing rows that do not contain missing values in Age_of_Casualty
+
+# Next, we filter the dataset to include only the rows where "Age of Casualty" is not missing. This will be our training dataset for building the regression model.
+```{r}
+train_data <- data %>%
+  filter(!is.na(Age_of_Casualty))
+```
+
+# Task 3:  Build a linear regression model using the specified predictors
+
+# We use the 'lm()' function to build a linear regression model with "Age of Casualty" as the dependent variable and the specified predictors.
+```{r}
+lm_model <- lm(`Age_of_Casualty` ~ `Casualty_Class` + `Casualty_Severity` 
+               + `Type_of_Vehicle` + `Weather_Conditions`, data = train_data)
+
+print(summary(lm_model))
+```
+
+# Task 4:  Create a new data frame with rows containing missing values in Age_of_Casualty
+
+# We then create a new data frame that includes only the rows where "Age of Casualty" is missing. This dataset will be used for predicting and imputing the missing values.
+```{r}
+missing_data <- data %>%
+  filter(is.na(Age_of_Casualty))
+View(missing_data)
+```
+
+# Task 5:  Predict the missing values using the linear regression model and impute them
+
+# Using the trained regression model, we predict the missing values in "Age of Casualty" and impute these values back into the original dataset.
+```{r}
+# Ensure that Casualty_Class and Type_of_Vehicle in missing_data are converted to factors with the same levels as in train_data.
+missing_data$Casualty_Class <- factor(missing_data$Casualty_Class, levels = levels(train_data$Casualty_Class))
+missing_data$Type_of_Vehicle <- factor(missing_data$Type_of_Vehicle, levels = levels(train_data$Type_of_Vehicle))
+
+predicted_age <- predict(lm_model, newdata = missing_data)
+
+data$Age_of_Casualty[is.na(data$Age_of_Casualty)] <- predicted_age
+
+missing_data <- data %>%
+  filter(is.na(Age_of_Casualty))
+```
+
+# Task 6:  Round the imputed values and convert the data type to integer
+
+# The predicted values might be in decimals, so we round them to the nearest integer and change the data type to integer.
+```{r}
+data$Age_of_Casualty <- round(data$Age_of_Casualty)
+
+data$Age_of_Casualty <- as.integer(data$Age_of_Casualty)
+View(data)
+```
+
+# Task 7:  Check if there are any missing values remaining
+
+# We verify that there are no missing values left in the dataset.
+```{r}
+missing_values <- colSums(is.na(data))
+print("Columns with Missing Values:")
+print(missing_values[missing_values > 0])
+```
+
+# Task 8:  Save the imputed data to a CSV file
+
+# Finally, we save the dataset with the imputed values to a CSV file named "regression.csv".
+```{r}
+write.csv(data, "regression.csv", row.names = FALSE)
+```
+
+# Question: Discuss in your report what problems you have found while imputing the missing values, and how you deal with them. 
+# Answer: During the imputation process of "Age of Casualty," several issues were identified and addressed: 
+# 1. Missing Predictor Values:
+# a. Problem: The regression model cannot handle missing values in predictors.
+# b. Solution: Filtered out rows with missing values in "Casualty Class," "Casualty Severity," "Type of Vehicle," and "Weather Conditions" before training.
+# 2. Decimal Predicted Values: 
+# a. Problem: The predicted ages were in decimals. 
+# b. Solution: Rounded the predicted values to the nearest integer to ensure realistic age data. 
+# 3. Overfitting and Model Performance: 
+# a. Problem: The model might overfit, performing well on training data but poorly on new data. 
+# b. Solution: Evaluated the model's performance using summary statistics (e.g., R-squared) to ensure a balance between model complexity and predictive power.
+# These steps ensured accurate and reliable imputation of missing "Age of Casualty" values. 
+
+# Summary of Part 3: Regression 
+# In this part, we successfully trained a linear regression model to impute the missing values in the "Age of Casualty" column. The model used the predictors "Casualty Class," "Casualty Severity," "Type of Vehicle," and "Weather Conditions." After predicting and imputing the missing values, we ensured the data integrity by rounding off the imputed values and converting them to integers. The final dataset, with no missing values, was saved as "regression.csv". This process addressed the challenge of handling missing data effectively, ensuring a robust and complete dataset for further analysis. 
